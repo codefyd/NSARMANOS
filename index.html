@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>نظام المجمع</title>
+  <title>نظام مجمع الحلق</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -13,43 +14,162 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg sticky-top">
-  <div class="container">
-    <a class="navbar-brand fw-bold" href="index.html">نظام المجمع</a>
-    <div class="ms-auto d-flex gap-2">
-      <a class="btn btn-outline-primary" href="staff-login.html">دخول العاملين</a>
+
+  <nav class="navbar navbar-expand-lg sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html">
+        <i class="fa-solid fa-mosque ms-2"></i>
+        نظام المجمع
+      </a>
+
+      <div class="ms-auto d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="register.html">
+          <i class="fa-solid fa-user-plus ms-1"></i>
+          التسجيل
+        </a>
+        <a class="btn btn-outline-primary" href="student-lookup.html">
+          <i class="fa-solid fa-id-card ms-1"></i>
+          بيانات الطالب
+        </a>
+        <a class="btn btn-primary" href="staff-login.html">
+          <i class="fa-solid fa-lock ms-1"></i>
+          دخول العاملين
+        </a>
+      </div>
     </div>
-  </div>
-</nav>
-<section class="hero">
-  <div class="container">
-    <div class="row g-4 align-items-center">
-      <div class="col-lg-7">
-        <div class="card-soft">
-          <div class="badge-soft mb-3"><i class="fa-solid fa-layer-group"></i> نظام إدارة مجمع الحلق</div>
-          <h1 class="hero-title">بوابات التسجيل، بيانات الطالب، ولوحة العاملين في مكان واحد</h1>
-          <p class="hero-desc">واجهة خارجية للطلاب وواجهة داخلية للعاملين، مع ربط مباشر عبر Google Apps Script وGoogle Sheets وصفحات GitHub Pages.</p>
-          <div class="d-flex flex-wrap gap-2">
-            <a class="btn btn-success btn-lg" href="register.html">بوابة التسجيل والقبول</a>
-            <a class="btn btn-outline-secondary btn-lg" href="student-lookup.html">بوابة بيانات الطالب</a>
-            <button class="btn btn-outline-primary btn-lg" id="setupSystemBtn">تهيئة الجداول لأول مرة</button>
+  </nav>
+
+  <section class="hero py-5">
+    <div class="container">
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-7">
+          <div class="card-soft">
+            <div class="badge-soft mb-3">
+              <i class="fa-solid fa-layer-group"></i>
+              نظام إدارة مجمع حلقات تحفيظ القرآن
+            </div>
+
+            <h1 class="hero-title">
+              بوابات موحدة للتسجيل، بيانات الطالب، وإدارة العاملين
+            </h1>
+
+            <p class="hero-desc">
+              واجهة خارجية لأولياء الأمور والطلاب، وواجهة داخلية للعاملين والإدارة،
+              مع ربط مباشر عبر Google Apps Script وGoogle Sheets واستضافة الواجهة على GitHub Pages.
+            </p>
+
+            <div class="d-flex flex-wrap gap-2 mt-4">
+              <a class="btn btn-success btn-lg" href="register.html">
+                <i class="fa-solid fa-user-plus ms-1"></i>
+                بوابة التسجيل والقبول
+              </a>
+
+              <a class="btn btn-outline-secondary btn-lg" href="student-lookup.html">
+                <i class="fa-solid fa-id-card ms-1"></i>
+                بوابة بيانات الطالب
+              </a>
+
+              <a class="btn btn-outline-primary btn-lg" href="staff-login.html">
+                <i class="fa-solid fa-user-shield ms-1"></i>
+                بوابة العاملين
+              </a>
+            </div>
+
+            <div class="footer-note mt-3">
+              بعد ضبط <code>config.js</code> وربط رابط Google Apps Script المنشور،
+              يمكنك استخدام زر التهيئة مرة واحدة فقط لإنشاء الشيتات والبيانات الأساسية.
+            </div>
+
+            <div class="mt-3">
+              <button class="btn btn-warning" id="setupSystemBtn">
+                <i class="fa-solid fa-database ms-1"></i>
+                تهيئة الجداول لأول مرة
+              </button>
+            </div>
           </div>
-          <div class="footer-note mt-3">بعد ضبط <code>config.js</code> وربط Web App يمكنك الضغط على تهيئة الجداول مرة واحدة فقط.</div>
+        </div>
+
+        <div class="col-lg-5">
+          <div class="row g-3">
+            <div class="col-12">
+              <a class="quick-link" href="register.html">
+                <div class="quick-icon"><i class="fa-solid fa-user-plus"></i></div>
+                <h4 class="fw-bold">بوابة التسجيل</h4>
+                <div class="small-muted">
+                  استقبال طلبات الطلاب الجدد ومتابعتها حتى القبول أو الانتظار أو الرفض.
+                </div>
+              </a>
+            </div>
+
+            <div class="col-12">
+              <a class="quick-link" href="student-lookup.html">
+                <div class="quick-icon"><i class="fa-solid fa-id-card"></i></div>
+                <h4 class="fw-bold">بوابة بيانات الطالب</h4>
+                <div class="small-muted">
+                  استعراض بيانات الطالب، تعبئة الحقول الفارغة، ورفع طلبات التعديل عند الحاجة.
+                </div>
+              </a>
+            </div>
+
+            <div class="col-12">
+              <a class="quick-link" href="staff-login.html">
+                <div class="quick-icon"><i class="fa-solid fa-chart-line"></i></div>
+                <h4 class="fw-bold">لوحة العاملين</h4>
+                <div class="small-muted">
+                  لوحة موحدة للمعلم والمشرف والمدير لإدارة الطلاب والطلبات والإنذارات والإعدادات.
+                </div>
+              </a>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="col-lg-5">
-        <div class="row g-3">
-          <div class="col-12"><a class="quick-link" href="register.html"><div class="quick-icon"><i class="fa-solid fa-user-plus"></i></div><h4 class="fw-bold">بوابة التسجيل</h4><div class="small-muted">استقبال طلبات التسجيل الجديدة بحالة افتراضية: جديد.</div></a></div>
-          <div class="col-12"><a class="quick-link" href="student-lookup.html"><div class="quick-icon"><i class="fa-solid fa-id-card"></i></div><h4 class="fw-bold">بوابة بيانات الطالب</h4><div class="small-muted">استعراض بيانات الطالب وتعبئة الحقول الفارغة أو رفع طلبات التعديل.</div></a></div>
-          <div class="col-12"><a class="quick-link" href="staff-login.html"><div class="quick-icon"><i class="fa-solid fa-lock"></i></div><h4 class="fw-bold">بوابة العاملين</h4><div class="small-muted">لوحة حسب الصلاحيات للمعلم والمشرف والمدير.</div></a></div>
+
+      <div class="row g-3 mt-4">
+        <div class="col-md-4">
+          <div class="section-card h-100">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="fa-solid fa-circle-check text-success"></i>
+              <h5 class="fw-bold mb-0">بوابات واضحة</h5>
+            </div>
+            <div class="small-muted">
+              فصل بين واجهة التسجيل، وواجهة بيانات الطالب، وواجهة العاملين لتجربة أسهل وأكثر ترتيبًا.
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="section-card h-100">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="fa-solid fa-bell text-warning"></i>
+              <h5 class="fw-bold mb-0">متابعة وإنذارات</h5>
+            </div>
+            <div class="small-muted">
+              دعم الإنذارات التعليمية والإدارية، مع إمكانية التحديث والمتابعة داخل لوحة العاملين.
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="section-card h-100">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="fa-solid fa-link text-primary"></i>
+              <h5 class="fw-bold mb-0">ربط مباشر</h5>
+            </div>
+            <div class="small-muted">
+              الواجهة تعمل مباشرة مع Google Apps Script وGoogle Sheets بدون استضافة خادم تقليدي.
+            </div>
+          </div>
         </div>
       </div>
     </div>
+  </section>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary"></div>
   </div>
-</section>
-<div class="loading-overlay" id="loadingOverlay"><div class="spinner-border text-primary"></div></div>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script src="config.js"></script>
-<script src="app.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
