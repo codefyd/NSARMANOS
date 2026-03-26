@@ -1,318 +1,1288 @@
-(function(){
+(function () {
   const CONFIG = window.APP_CONFIG || {};
-  const STORAGE_KEY = 'nsar_session_v2';
+  const STORAGE_KEY = "nsar_session_v3";
+
   const state = {
-    session: JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'),
-    dashboard: null
+    session: readSession(),
+    dashboard: null,
   };
 
-  function byId(id){return document.getElementById(id)}
-  function showLoading(show){const el=byId('loadingOverlay'); if(el) el.classList.toggle('show', !!show)}
-  function ensureApi(){
-    if(!CONFIG.API_URL || CONFIG.API_URL.includes('ضع-')) throw new Error('أكمل ملف config.js وضع رابط Google Apps Script المنشور');
-  }
-  async function api(action, payload={}){
-    ensureApi();
-    showLoading(true);
-    try{
-      const res = await fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({action}, payload))});
-      const json = await res.json();
-      if(!json.success) throw new Error(json.error || 'حدث خطأ');
-      return json.data;
-    }finally{showLoading(false)}
-  }
-  function toast(icon,title,text=''){ if(window.Swal) return Swal.fire({icon,title,text,confirmButtonText:'حسنًا'}); alert(title + (text ? '\n'+text : '')); }
-  function setSession(data){ state.session=data; localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
-  function clearSession(){ state.session=null; localStorage.removeItem(STORAGE_KEY); }
-  function roleCan(role, roles){ return roles.includes(role); }
-  function dataItem(label,val){ return `<div class="data-item"><div class="label">${label}</div><div class="value">${val ?? ''}</div></div>`; }
-  function whats(num){ return `https://wa.me/966${String(num).replace(/^0/,'')}`; }
-  function safe(v){ return v==null?'':String(v); }
-  function tableFromRows(headers, rows){
-    if(!rows.length) return `<div class="empty-state">لا توجد بيانات حالياً</div>`;
-    return `<div class="table-responsive"><table class="table table-hover align-middle"><thead><tr>${headers.map(h=>`<th>${h.label}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${headers.map(h=>`<td>${typeof h.render==='function'?h.render(r):safe(r[h.key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-  }
-
-  async function initHome(){
-    const setupBtn = byId('setupSystemBtn');
-    if(setupBtn) setupBtn.onclick = async ()=>{
-      try{ const res = await api('setupSystem'); await toast('success','تمت التهيئة',res.message); }catch(e){ toast('error','تعذر التهيئة',e.message); }
-    };
-  }
-
-  async function initRegisterPage(){
-    const form = byId('registrationForm'); if(!form) return;
-    form.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      const data = Object.fromEntries(new FormData(form).entries());
-      try{
-        const res = await api('registerStudent', data);
-        form.reset();
-        await toast('success','تم إرسال الطلب',`رقم الطلب: ${res.requestId}`);
-      }catch(err){ toast('error','تعذر إرسال الطلب',err.message); }
-    });
-  }
-
-  async function initLookupPage(){
-    const searchForm = byId('studentLookupForm'); if(!searchForm) return;
-    let current = null;
-    searchForm.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      const data = Object.fromEntries(new FormData(searchForm).entries());
-      try{
-        current = await api('lookupStudent', data);
-        const st = current.student;
-        byId('studentResult').innerHTML = `<div class="section-card"><div class="d-flex justify-content-between align-items-center mb-3"><div><h4 class="mb-1 fw-bold">${st['اسم_الطالب']}</h4><div class="small-muted">الحلقة: ${st['الحلقة']||'غير محددة'} — الحالة: ${st['حالة_الطالب']||'-'}</div></div><button class="btn btn-outline-primary" id="openUpdateModalBtn">طلب تعديل / تعبئة</button></div><div class="data-grid">${dataItem('هوية الطالب',st['هوية_الطالب'])}${dataItem('جوال الطالب',st['جوال_الطالب'])}${dataItem('تاريخ الميلاد',st['تاريخ_الميلاد'])}${dataItem('العنوان',st['العنوان'])}${dataItem('المرحلة الدراسية',st['المرحلة_الدراسية'])}${dataItem('الصف الدراسي',st['الصف_الدراسي'])}${dataItem('اسم ولي الأمر',st['اسم_ولي_الأمر'])}${dataItem('جوال ولي الأمر',st['جوال_ولي_الأمر'])}${dataItem('صلة ولي الأمر',st['صلة_ولي_الأمر'])}${dataItem('مجموع الحفظ',st['مجموع_الحفظ']||'')}</div></div>`;
-        byId('openUpdateModalBtn').onclick = openUpdateDialog;
-      }catch(err){ byId('studentResult').innerHTML = `<div class="alert alert-danger">${err.message}</div>`; }
-    });
-
-    async function openUpdateDialog(){
-      if(!current) return;
-      const st = current.student;
-      const editable = ['جوال_الطالب','تاريخ_الميلاد','العنوان','المرحلة_الدراسية','الصف_الدراسي','مجموع_الحفظ','الحلقة'];
-      const html = editable.map(field=>`<label class="form-label mt-2">${field}</label><input id="f_${field}" class="form-control" value="${safe(st[field])}">`).join('');
-      const {value} = await Swal.fire({title:'طلب تعديل بيانات الطالب',html:`<div class="text-end">${html}</div>`,focusConfirm:false,preConfirm:()=>{
-        const fields={}; editable.forEach(f=>fields[f]=document.getElementById(`f_${f}`).value); return fields; },confirmButtonText:'إرسال الطلب'});
-      if(!value) return;
-      try{
-        const res = await api('submitStudentUpdates',{studentId:st['معرف_الطالب'], fields:value});
-        await toast('success','تم استلام الطلب',`تم التحديث المباشر: ${res.updatedDirectly.join('، ') || 'لا يوجد'}${res.updateRequests.length ? '\nطلبات التعديل: '+res.updateRequests.join('، ') : ''}`);
-      }catch(err){ toast('error','تعذر إرسال الطلب',err.message); }
+  function readSession() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    } catch (_e) {
+      return null;
     }
   }
 
-  async function initLoginPage(){
-    const form = byId('staffLoginForm'); if(!form) return;
-    form.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      try{
-        const pin = byId('staffPin').value.trim();
-        const session = await api('login',{pin});
-        setSession(session);
-        location.href='staff-dashboard.html';
-      }catch(err){ toast('error','تعذر تسجيل الدخول',err.message); }
+  function saveSession(session) {
+    state.session = session;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  }
+
+  function clearSession() {
+    state.session = null;
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function qs(selector, root = document) {
+    return root.querySelector(selector);
+  }
+
+  function qsa(selector, root = document) {
+    return Array.from(root.querySelectorAll(selector));
+  }
+
+  function safe(value) {
+    return value == null ? "" : String(value);
+  }
+
+  function escapeHtml(value) {
+    return safe(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function ensureApi() {
+    if (!CONFIG.API_URL || CONFIG.API_URL.includes("ضع-")) {
+      throw new Error("أكمل ملف config.js وضع رابط Google Apps Script المنشور");
+    }
+  }
+
+  function showLoading(show) {
+    const overlay = byId("loadingOverlay");
+    if (overlay) overlay.classList.toggle("show", !!show);
+  }
+
+  async function api(action, payload = {}) {
+    ensureApi();
+    showLoading(true);
+    try {
+      const response = await fetch(CONFIG.API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8",
+        },
+        body: JSON.stringify({ action, ...payload }),
+      });
+
+      let json;
+      try {
+        json = await response.json();
+      } catch (_e) {
+        throw new Error("تعذر قراءة استجابة الخادم");
+      }
+
+      if (!json.success) {
+        throw new Error(json.error || "حدث خطأ غير متوقع");
+      }
+
+      return json.data;
+    } catch (error) {
+      throw error;
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  async function toast(icon, title, text = "") {
+    if (window.Swal) {
+      return Swal.fire({
+        icon,
+        title,
+        text,
+        confirmButtonText: "حسنًا",
+      });
+    }
+    alert(title + (text ? "\n" + text : ""));
+  }
+
+  function whatsappLink(phone) {
+    const raw = safe(phone).replace(/\D/g, "");
+    if (!raw) return "#";
+    const normalized = raw.startsWith("966")
+      ? raw
+      : raw.startsWith("0")
+      ? "966" + raw.slice(1)
+      : raw;
+    return `https://wa.me/${normalized}`;
+  }
+
+  function dataItem(label, value) {
+    return `
+      <div class="data-item">
+        <div class="label">${escapeHtml(label)}</div>
+        <div class="value">${escapeHtml(value)}</div>
+      </div>
+    `;
+  }
+
+  function tableFromRows(headers, rows) {
+    if (!rows || !rows.length) {
+      return `<div class="empty-state">لا توجد بيانات حالياً</div>`;
+    }
+
+    return `
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead>
+            <tr>
+              ${headers.map((h) => `<th>${escapeHtml(h.label)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map((row) => {
+                return `
+                  <tr>
+                    ${headers
+                      .map((h) => {
+                        if (typeof h.render === "function") {
+                          return `<td>${h.render(row)}</td>`;
+                        }
+                        return `<td>${escapeHtml(row[h.key])}</td>`;
+                      })
+                      .join("")}
+                  </tr>
+                `;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function roleCan(role, roles) {
+    return roles.includes(role);
+  }
+
+  function setText(id, value) {
+    const el = byId(id);
+    if (el) el.textContent = safe(value);
+  }
+
+  function csvDownload(filename, content) {
+    const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "export.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function initHome() {
+    const setupBtn = byId("setupSystemBtn");
+    if (!setupBtn) return;
+
+    setupBtn.addEventListener("click", async () => {
+      try {
+        const result = await api("setupSystem");
+        await toast("success", "تمت التهيئة بنجاح", result.message || "");
+      } catch (error) {
+        await toast("error", "تعذر تنفيذ التهيئة", error.message);
+      }
     });
   }
 
-  async function initDashboardPage(){
-    if(!byId('dashboardRoot')) return;
-    if(!state.session?.token){ location.href='staff-login.html'; return; }
-    byId('currentUserName').textContent = state.session.name;
-    byId('currentUserRole').textContent = state.session.role;
-    byId('logoutBtn').onclick = async ()=>{ try{ await api('logout',{token:state.session.token}); }catch(_e){} clearSession(); location.href='staff-login.html'; };
-    document.querySelectorAll('.side-link').forEach(link=>link.onclick = (e)=>{ e.preventDefault(); switchPanel(link.dataset.panel, link); });
-    byId('refreshDashboardBtn').onclick = loadDashboard;
+  async function initRegisterPage() {
+    const form = byId("registrationForm");
+    if (!form) return;
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const data = Object.fromEntries(new FormData(form).entries());
+
+      try {
+        const result = await api("registerStudent", data);
+        form.reset();
+        await toast("success", "تم إرسال طلب التسجيل", `رقم الطلب: ${result.requestId}`);
+      } catch (error) {
+        await toast("error", "تعذر إرسال الطلب", error.message);
+      }
+    });
+  }
+
+  async function initLookupPage() {
+    const form = byId("studentLookupForm");
+    const resultWrap = byId("studentResult");
+    if (!form || !resultWrap) return;
+
+    let currentLookup = null;
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      try {
+        const data = Object.fromEntries(new FormData(form).entries());
+        const result = await api("lookupStudent", data);
+        currentLookup = result;
+
+        const st = result.student || {};
+        resultWrap.innerHTML = `
+          <div class="section-card">
+            <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+              <div>
+                <h4 class="mb-1 fw-bold">${escapeHtml(st["اسم_الطالب"])}</h4>
+                <div class="small-muted">
+                  الحلقة: ${escapeHtml(st["الحلقة"] || "غير محددة")} — الحالة: ${escapeHtml(st["حالة_الطالب"] || "-")}
+                </div>
+              </div>
+              <button class="btn btn-outline-primary" id="openUpdateModalBtn">طلب تعديل / تعبئة</button>
+            </div>
+
+            <div class="data-grid">
+              ${dataItem("هوية الطالب", st["هوية_الطالب"])}
+              ${dataItem("جوال الطالب", st["جوال_الطالب"])}
+              ${dataItem("تاريخ الميلاد", st["تاريخ_الميلاد"])}
+              ${dataItem("العنوان", st["العنوان"])}
+              ${dataItem("المرحلة الدراسية", st["المرحلة_الدراسية"])}
+              ${dataItem("الصف الدراسي", st["الصف_الدراسي"])}
+              ${dataItem("اسم ولي الأمر", st["اسم_ولي_الأمر"])}
+              ${dataItem("جوال ولي الأمر", st["جوال_ولي_الأمر"])}
+              ${dataItem("هوية ولي الأمر", st["هوية_ولي_الأمر"])}
+              ${dataItem("صلة ولي الأمر", st["صلة_ولي_الأمر"])}
+              ${dataItem("الحلقة", st["الحلقة"])}
+              ${dataItem("مجموع الحفظ", st["مجموع_الحفظ"] || "")}
+            </div>
+          </div>
+        `;
+
+        const btn = byId("openUpdateModalBtn");
+        if (btn) btn.addEventListener("click", openUpdateDialog);
+      } catch (error) {
+        resultWrap.innerHTML = `<div class="alert alert-danger">${escapeHtml(error.message)}</div>`;
+      }
+    });
+
+    async function openUpdateDialog() {
+      if (!currentLookup || !window.Swal) return;
+
+      const st = currentLookup.student || {};
+      const editableFields = [
+        "جوال_الطالب",
+        "تاريخ_الميلاد",
+        "العنوان",
+        "المرحلة_الدراسية",
+        "الصف_الدراسي",
+        "مجموع_الحفظ",
+        "الحلقة",
+      ];
+
+      const html = editableFields
+        .map((field) => {
+          return `
+            <label class="form-label mt-2">${escapeHtml(field)}</label>
+            <input id="f_${field}" class="form-control" value="${escapeHtml(st[field])}">
+          `;
+        })
+        .join("");
+
+      const { value } = await Swal.fire({
+        title: "طلب تعديل بيانات الطالب",
+        html: `<div class="text-end">${html}</div>`,
+        focusConfirm: false,
+        confirmButtonText: "إرسال الطلب",
+        preConfirm: () => {
+          const fields = {};
+          editableFields.forEach((field) => {
+            const input = document.getElementById(`f_${field}`);
+            fields[field] = input ? input.value : "";
+          });
+          return fields;
+        },
+      });
+
+      if (!value) return;
+
+      try {
+        const result = await api("submitStudentUpdates", {
+          studentId: st["معرف_الطالب"],
+          fields: value,
+        });
+
+        const direct = (result.updatedDirectly || []).length
+          ? result.updatedDirectly.join("، ")
+          : "لا يوجد";
+        const reqs = (result.updateRequests || []).length
+          ? "\nطلبات التعديل: " + result.updateRequests.join("، ")
+          : "";
+
+        await toast("success", "تم استلام الطلب", `تم التحديث المباشر: ${direct}${reqs}`);
+      } catch (error) {
+        await toast("error", "تعذر إرسال الطلب", error.message);
+      }
+    }
+  }
+
+  async function initLoginPage() {
+    const form = byId("staffLoginForm");
+    if (!form) return;
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      try {
+        const pin = safe(byId("staffPin")?.value).trim();
+        const session = await api("login", { pin });
+        saveSession(session);
+        location.href = "staff-dashboard.html";
+      } catch (error) {
+        await toast("error", "تعذر تسجيل الدخول", error.message);
+      }
+    });
+  }
+
+  async function initDashboardPage() {
+    const root = byId("dashboardRoot");
+    if (!root) return;
+
+    if (!state.session?.token) {
+      location.href = "staff-login.html";
+      return;
+    }
+
+    setText("currentUserName", state.session.name);
+    setText("currentUserRole", state.session.role);
+
+    const logoutBtn = byId("logoutBtn");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", async () => {
+        try {
+          await api("logout", { token: state.session.token });
+        } catch (_e) {
+        }
+        clearSession();
+        location.href = "staff-login.html";
+      });
+    }
+
+    const refreshBtn = byId("refreshDashboardBtn");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", loadDashboard);
+    }
+
+    qsa(".side-link").forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        switchPanel(link.dataset.panel, link);
+      });
+    });
+
     await loadDashboard();
   }
 
-  function switchPanel(name, link){
-    document.querySelectorAll('.page-panel').forEach(p=>p.classList.toggle('active', p.id===name));
-    document.querySelectorAll('.side-link').forEach(l=>l.classList.toggle('active', l===link || l.dataset.panel===name));
+  function switchPanel(panelId, clickedLink) {
+    qsa(".page-panel").forEach((panel) => {
+      panel.classList.toggle("active", panel.id === panelId);
+    });
+
+    qsa(".side-link").forEach((link) => {
+      link.classList.toggle(
+        "active",
+        link === clickedLink || link.dataset.panel === panelId
+      );
+    });
   }
 
-  async function loadDashboard(){
-    try{
-      state.dashboard = await api('getDashboard',{token:state.session.token});
-      const role = state.dashboard.session.role;
-      const stats = state.dashboard.stats;
-      byId('kpis').innerHTML = [
-        ['عدد الطلاب',stats.students,'fa-users'],['عدد الحلق',stats.circles,'fa-layer-group'],['الطلبات الجديدة',stats.newRequests,'fa-file-circle-plus'],['طلبات الانتظار',stats.waitingRequests,'fa-hourglass-half'],['الإنذارات التعليمية المفتوحة',stats.openEducationalWarnings,'fa-triangle-exclamation'],['الإنذارات الإدارية الجديدة',stats.newAdministrativeWarnings,'fa-bell']
-      ].map(x=>`<div class="col-md-4 col-lg-4"><div class="kpi-card"><i class="fa-solid ${x[2]} bg-icon-float"></i><div class="kpi-label">${x[0]}</div><div class="kpi-value">${x[1]}</div></div></div>`).join('');
+  async function loadDashboard() {
+    try {
+      state.dashboard = await api("getDashboard", { token: state.session.token });
+
+      const role = state.dashboard?.session?.role || state.session?.role || "";
+      const stats = state.dashboard?.stats || {};
+
+      renderKpis(stats);
       renderStudents(role);
       renderRequests(role);
       renderWarnings(role);
       renderSettings(role);
-      const firstAllowed = role=== 'معلم' ? 'panelStudents' : 'panelStudents';
-      switchPanel(firstAllowed, document.querySelector(`.side-link[data-panel="${firstAllowed}"]`));
-    }catch(err){
-      if(err.message.includes('الجلسة')){ clearSession(); location.href='staff-login.html'; return; }
-      toast('error','تعذر تحميل اللوحة',err.message);
+
+      const firstPanel = qs('.side-link[data-panel="panelStudents"]');
+      if (firstPanel) switchPanel("panelStudents", firstPanel);
+    } catch (error) {
+      if (safe(error.message).includes("الجلسة")) {
+        clearSession();
+        location.href = "staff-login.html";
+        return;
+      }
+      await toast("error", "تعذر تحميل اللوحة", error.message);
     }
   }
 
-  function renderStudents(role){
-    const ds = state.dashboard.datasets;
-    const students = ds.students;
-    byId('studentsTableWrap').innerHTML = tableFromRows([
-      {label:'الاسم',key:'اسم_الطالب',render:r=>`<button class="btn btn-link p-0 student-detail-btn" data-id="${r['معرف_الطالب']}">${r['اسم_الطالب']}</button>`},
-      {label:'الهوية',key:'هوية_الطالب'}, {label:'الحلقة',key:'الحلقة'}, {label:'المعلم',key:'المعلم'}, {label:'مجموع الحفظ',key:'مجموع_الحفظ'}, {label:'حالة الطالب',key:'حالة_الطالب'}
-    ], students);
-    document.querySelectorAll('.student-detail-btn').forEach(btn=>btn.onclick = ()=>openStudentDetail(btn.dataset.id));
-    const canManage = roleCan(role,['مشرف إداري','مدير']);
-    byId('studentActions').classList.toggle('d-none', !canManage);
-    if(canManage){
-      byId('openAddStudentBtn').onclick = ()=>openStudentForm();
-      byId('openBulkUpdateBtn').onclick = ()=>openBulkDialog();
-      byId('exportCsvBtn').onclick = ()=>exportCsv(students);
-    }
+  function renderKpis(stats) {
+    const wrap = byId("kpis");
+    if (!wrap) return;
+
+    const items = [
+      ["عدد الطلاب", stats.students || 0, "fa-users"],
+      ["عدد الحلق", stats.circles || 0, "fa-layer-group"],
+      ["الطلبات الجديدة", stats.newRequests || 0, "fa-file-circle-plus"],
+      ["طلبات الانتظار", stats.waitingRequests || 0, "fa-hourglass-half"],
+      ["الإنذارات التعليمية المفتوحة", stats.openEducationalWarnings || 0, "fa-triangle-exclamation"],
+      ["الإنذارات الإدارية الجديدة", stats.newAdministrativeWarnings || 0, "fa-bell"],
+    ];
+
+    wrap.innerHTML = items
+      .map(([label, value, icon]) => {
+        return `
+          <div class="col-md-4 col-lg-4">
+            <div class="kpi-card">
+              <i class="fa-solid ${icon} bg-icon-float"></i>
+              <div class="kpi-label">${escapeHtml(label)}</div>
+              <div class="kpi-value">${escapeHtml(value)}</div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
   }
 
-  async function openStudentDetail(id){
-    const st = state.dashboard.datasets.students.find(s=>s['معرف_الطالب']===id); if(!st) return;
-    const role = state.dashboard.session.role;
-    const canEdit = roleCan(role,['مشرف إداري','مدير']);
-    const notes = state.dashboard.datasets.teacherNotes.filter(n=>n['معرف_الطالب']===id);
-    const html = `<div class="text-end">`+
-      `<div class="data-grid mb-3">${['اسم_الطالب','هوية_الطالب','جوال_الطالب','العنوان','المرحلة_الدراسية','الصف_الدراسي','جوال_ولي_الأمر','هوية_ولي_الأمر','صلة_ولي_الأمر','الحلقة','مجموع_الحفظ','حالة_الطالب'].map(k=>dataItem(k,st[k]||'')).join('')}</div>`+
-      `<div class="mt-3"><h6 class="fw-bold">ملاحظات المعلمين</h6>${notes.length?notes.map(n=>`<div class="border rounded-3 p-2 mb-2"><div class="small-muted">${n['المعلم']} — ${n['تاريخ_الإضافة']}</div><div>${n['الملاحظة']}</div></div>`).join(''):'<div class="small-muted">لا توجد ملاحظات</div>'}</div>`+
-      `</div>`;
-    await Swal.fire({title:st['اسم_الطالب'],html,showCancelButton:canEdit,confirmButtonText:'إغلاق',cancelButtonText:'تعديل'}).then(async(result)=>{ if(result.dismiss===Swal.DismissReason.cancel) openStudentForm(st); });
+  function renderStudents(role) {
+    const wrap = byId("studentsTableWrap");
+    if (!wrap || !state.dashboard) return;
+
+    const students = state.dashboard.datasets?.students || [];
+
+    wrap.innerHTML = tableFromRows(
+      [
+        {
+          label: "الاسم",
+          key: "اسم_الطالب",
+          render: (r) =>
+            `<button class="btn btn-link p-0 student-detail-btn" data-id="${escapeHtml(
+              r["معرف_الطالب"]
+            )}">${escapeHtml(r["اسم_الطالب"])}</button>`,
+        },
+        { label: "الهوية", key: "هوية_الطالب" },
+        { label: "الحلقة", key: "الحلقة" },
+        { label: "المعلم", key: "المعلم" },
+        { label: "مجموع الحفظ", key: "مجموع_الحفظ" },
+        { label: "حالة الطالب", key: "حالة_الطالب" },
+      ],
+      students
+    );
+
+    qsa(".student-detail-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openStudentDetail(btn.dataset.id));
+    });
+
+    const actionsWrap = byId("studentActions");
+    const canManage = roleCan(role, ["مشرف إداري", "مدير"]);
+    if (actionsWrap) actionsWrap.classList.toggle("d-none", !canManage);
+
+    if (!canManage) return;
+
+    const addBtn = byId("openAddStudentBtn");
+    const bulkBtn = byId("openBulkUpdateBtn");
+    const exportBtn = byId("exportCsvBtn");
+
+    if (addBtn) addBtn.onclick = () => openStudentForm();
+    if (bulkBtn) bulkBtn.onclick = () => openBulkDialog();
+    if (exportBtn) exportBtn.onclick = () => exportStudentsCsv();
   }
 
-  async function openStudentForm(student=null){
-    const lists = state.dashboard.datasets.lists;
-    const optionify = (rows,key='الاسم',val='الاسم', current='')=>rows.map(r=>`<option value="${r[val]}" ${String(current)===String(r[val])?'selected':''}>${r[key]}</option>`).join('');
+  async function openStudentDetail(studentId) {
+    if (!state.dashboard || !window.Swal) return;
+
+    const st = (state.dashboard.datasets?.students || []).find(
+      (s) => safe(s["معرف_الطالب"]) === safe(studentId)
+    );
+    if (!st) return;
+
+    const notes = (state.dashboard.datasets?.teacherNotes || []).filter(
+      (n) => safe(n["معرف_الطالب"]) === safe(studentId)
+    );
+
+    const role = state.dashboard?.session?.role || "";
+    const canEdit = roleCan(role, ["مشرف إداري", "مدير"]);
+
+    const notesHtml = notes.length
+      ? notes
+          .map(
+            (n) => `
+              <div class="border rounded-3 p-2 mb-2">
+                <div class="fw-bold">${escapeHtml(n["المعلم"])}</div>
+                <div class="small-muted mb-1">${escapeHtml(n["تاريخ_الإضافة"])}</div>
+                <div>${escapeHtml(n["الملاحظة"])}</div>
+              </div>
+            `
+          )
+          .join("")
+      : `<div class="small-muted">لا توجد ملاحظات</div>`;
+
+    await Swal.fire({
+      title: escapeHtml(st["اسم_الطالب"]),
+      width: 900,
+      confirmButtonText: canEdit ? "إغلاق" : "حسنًا",
+      html: `
+        <div class="text-end">
+          <div class="data-grid mb-4">
+            ${dataItem("هوية الطالب", st["هوية_الطالب"])}
+            ${dataItem("جوال الطالب", st["جوال_الطالب"])}
+            ${dataItem("العنوان", st["العنوان"])}
+            ${dataItem("المرحلة الدراسية", st["المرحلة_الدراسية"])}
+            ${dataItem("الصف الدراسي", st["الصف_الدراسي"])}
+            ${dataItem("اسم ولي الأمر", st["اسم_ولي_الأمر"])}
+            ${dataItem("جوال ولي الأمر", st["جوال_ولي_الأمر"])}
+            ${dataItem("الحلقة", st["الحلقة"])}
+            ${dataItem("المعلم", st["المعلم"])}
+            ${dataItem("مجموع الحفظ", st["مجموع_الحفظ"])}
+            ${dataItem("حالة الطالب", st["حالة_الطالب"])}
+          </div>
+          <div>
+            <h6 class="fw-bold mb-2">ملاحظات الطالب</h6>
+            ${notesHtml}
+          </div>
+        </div>
+      `,
+      showDenyButton: canEdit,
+      denyButtonText: "تعديل البيانات",
+    }).then(async (result) => {
+      if (result.isDenied && canEdit) {
+        await openStudentForm(st);
+      }
+    });
+  }
+
+  async function openStudentForm(student = null) {
+    if (!window.Swal || !state.dashboard) return;
+
+    const lists = state.dashboard.datasets?.lists || {};
+    const circles = lists.circles || [];
+    const grades = lists.grades || [];
+    const stages = lists.stages || [];
+    const statuses = lists.statuses || [];
+    const relations = lists.relations || [];
+
+    const selectHtml = (id, items, valueKey, selectedValue) => {
+      const options = items
+        .map((item) => {
+          const value = safe(item[valueKey]);
+          const selected = value === safe(selectedValue) ? "selected" : "";
+          return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(value)}</option>`;
+        })
+        .join("");
+      return `<select id="${id}" class="form-select"><option value="">-- اختر --</option>${options}</select>`;
+    };
+
     const html = `
       <div class="text-end">
         <div class="row g-2">
-          <div class="col-md-6"><label class="form-label">اسم الطالب</label><input id="studentName" class="form-control" value="${safe(student?.['اسم_الطالب'])}"></div>
-          <div class="col-md-6"><label class="form-label">هوية الطالب</label><input id="studentNationalId" class="form-control" value="${safe(student?.['هوية_الطالب'])}"></div>
-          <div class="col-md-6"><label class="form-label">جوال الطالب</label><input id="studentMobile" class="form-control" value="${safe(student?.['جوال_الطالب'])}"></div>
-          <div class="col-md-6"><label class="form-label">تاريخ الميلاد</label><input id="studentBirthDate" type="date" class="form-control" value="${safe(student?.['تاريخ_الميلاد'])}"></div>
-          <div class="col-12"><label class="form-label">العنوان</label><input id="studentAddress" class="form-control" value="${safe(student?.['العنوان'])}"></div>
-          <div class="col-md-6"><label class="form-label">المرحلة</label><select id="stage" class="form-select"><option value="">اختر</option>${optionify(lists.stages,'الاسم','الاسم',student?.['المرحلة_الدراسية'])}</select></div>
-          <div class="col-md-6"><label class="form-label">الصف</label><select id="grade" class="form-select"><option value="">اختر</option>${optionify(lists.grades,'الاسم','الاسم',student?.['الصف_الدراسي'])}</select></div>
-          <div class="col-md-6"><label class="form-label">اسم ولي الأمر</label><input id="guardianName" class="form-control" value="${safe(student?.['اسم_ولي_الأمر'])}"></div>
-          <div class="col-md-6"><label class="form-label">جوال ولي الأمر</label><input id="guardianMobile" class="form-control" value="${safe(student?.['جوال_ولي_الأمر'])}"></div>
-          <div class="col-md-6"><label class="form-label">هوية ولي الأمر</label><input id="guardianNationalId" class="form-control" value="${safe(student?.['هوية_ولي_الأمر'])}"></div>
-          <div class="col-md-6"><label class="form-label">صلة ولي الأمر</label><select id="guardianRelation" class="form-select"><option value="">اختر</option>${optionify(lists.relations,'الاسم','الاسم',student?.['صلة_ولي_الأمر'])}</select></div>
-          <div class="col-md-6"><label class="form-label">الحلقة</label><select id="circle" class="form-select"><option value="">اختر</option>${optionify(lists.circles,'اسم_الحلقة','اسم_الحلقة',student?.['الحلقة'])}</select></div>
-          <div class="col-md-6"><label class="form-label">المعلم</label><input id="teacher" class="form-control" value="${safe(student?.['المعلم'])}"></div>
-          <div class="col-md-4"><label class="form-label">مجموع الحفظ</label><input id="savedParts" class="form-control" value="${safe(student?.['مجموع_الحفظ'])}"></div>
-          <div class="col-md-4"><label class="form-label">حالة الطالب</label><select id="studentStatus" class="form-select"><option value="">اختر</option>${optionify(lists.statuses,'الاسم','الاسم',student?.['حالة_الطالب'])}</select></div>
-          <div class="col-md-4"><label class="form-label">عدد التأخر</label><input id="lateCount" class="form-control" value="${safe(student?.['عدد_التأخر'])}"></div>
-          <div class="col-md-4"><label class="form-label">عدد الغياب</label><input id="absenceCount" class="form-control" value="${safe(student?.['عدد_الغياب'])}"></div>
-          <div class="col-md-4"><label class="form-label">عدد الغياب بعذر</label><input id="excusedAbsenceCount" class="form-control" value="${safe(student?.['عدد_الغياب_بعذر'])}"></div>
+          <div class="col-md-6">
+            <label class="form-label">اسم الطالب</label>
+            <input id="sf_studentName" class="form-control" value="${escapeHtml(student?.["اسم_الطالب"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">هوية الطالب</label>
+            <input id="sf_studentNationalId" class="form-control" value="${escapeHtml(student?.["هوية_الطالب"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">جوال الطالب</label>
+            <input id="sf_studentMobile" class="form-control" value="${escapeHtml(student?.["جوال_الطالب"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">تاريخ الميلاد</label>
+            <input id="sf_studentBirthDate" type="date" class="form-control" value="${escapeHtml(student?.["تاريخ_الميلاد"])}">
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">العنوان</label>
+            <input id="sf_studentAddress" class="form-control" value="${escapeHtml(student?.["العنوان"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">المرحلة</label>
+            ${selectHtml("sf_stage", stages, "الاسم", student?.["المرحلة_الدراسية"])}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">الصف</label>
+            ${selectHtml("sf_grade", grades, "الاسم", student?.["الصف_الدراسي"])}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">اسم ولي الأمر</label>
+            <input id="sf_guardianName" class="form-control" value="${escapeHtml(student?.["اسم_ولي_الأمر"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">جوال ولي الأمر</label>
+            <input id="sf_guardianMobile" class="form-control" value="${escapeHtml(student?.["جوال_ولي_الأمر"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">هوية ولي الأمر</label>
+            <input id="sf_guardianNationalId" class="form-control" value="${escapeHtml(student?.["هوية_ولي_الأمر"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">صلة ولي الأمر</label>
+            ${selectHtml("sf_guardianRelation", relations, "الاسم", student?.["صلة_ولي_الأمر"])}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">الحلقة</label>
+            ${selectHtml("sf_circle", circles, "اسم_الحلقة", student?.["الحلقة"])}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">المعلم</label>
+            <input id="sf_teacher" class="form-control" value="${escapeHtml(student?.["المعلم"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">مجموع الحفظ</label>
+            <input id="sf_savedParts" class="form-control" value="${escapeHtml(student?.["مجموع_الحفظ"])}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">حالة الطالب</label>
+            ${selectHtml("sf_studentStatus", statuses, "الاسم", student?.["حالة_الطالب"])}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">عدد التأخر</label>
+            <input id="sf_lateCount" type="number" min="0" class="form-control" value="${escapeHtml(student?.["عدد_التأخر"] || 0)}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">عدد الغياب</label>
+            <input id="sf_absenceCount" type="number" min="0" class="form-control" value="${escapeHtml(student?.["عدد_الغياب"] || 0)}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">عدد الغياب بعذر</label>
+            <input id="sf_excusedAbsenceCount" type="number" min="0" class="form-control" value="${escapeHtml(student?.["عدد_الغياب_بعذر"] || 0)}">
+          </div>
         </div>
-      </div>`;
-    const {value} = await Swal.fire({title:student?'تعديل طالب':'إضافة طالب',html,width:900,focusConfirm:false,confirmButtonText:'حفظ',preConfirm:()=>({studentId:student?.['معرف_الطالب']||'',studentName:byId('studentName').value,studentNationalId:byId('studentNationalId').value,studentMobile:byId('studentMobile').value,studentBirthDate:byId('studentBirthDate').value,studentAddress:byId('studentAddress').value,stage:byId('stage').value,grade:byId('grade').value,guardianName:byId('guardianName').value,guardianMobile:byId('guardianMobile').value,guardianNationalId:byId('guardianNationalId').value,guardianRelation:byId('guardianRelation').value,circle:byId('circle').value,teacher:byId('teacher').value,savedParts:byId('savedParts').value,studentStatus:byId('studentStatus').value,lateCount:byId('lateCount').value,absenceCount:byId('absenceCount').value,excusedAbsenceCount:byId('excusedAbsenceCount').value})});
-    if(!value) return;
-    try{ await api('saveStudent',Object.assign({token:state.session.token}, value)); await toast('success','تم الحفظ'); await loadDashboard(); }catch(err){ toast('error','تعذر الحفظ',err.message); }
-  }
+      </div>
+    `;
 
-  async function openBulkDialog(){
-    const ids = state.dashboard.datasets.students.map(s=>`<option value="${s['معرف_الطالب']}">${s['اسم_الطالب']}</option>`).join('');
-    const lists = state.dashboard.datasets.lists;
-    const circles = lists.circles.map(c=>`<option value="${c['اسم_الحلقة']}">${c['اسم_الحلقة']}</option>`).join('');
-    const grades = lists.grades.map(c=>`<option value="${c['الاسم']}">${c['الاسم']}</option>`).join('');
-    const statuses = lists.statuses.map(c=>`<option value="${c['الاسم']}">${c['الاسم']}</option>`).join('');
-    const {value} = await Swal.fire({title:'تعديل جماعي',html:`<div class="text-end"><label class="form-label">الطلاب</label><select multiple id="bulkIds" class="form-select" style="height:180px">${ids}</select><div class="row g-2 mt-2"><div class="col-md-6"><label class="form-label">الحلقة</label><select id="bulkCircle" class="form-select"><option value="">بدون تغيير</option>${circles}</select></div><div class="col-md-6"><label class="form-label">الصف</label><select id="bulkGrade" class="form-select"><option value="">بدون تغيير</option>${grades}</select></div><div class="col-md-6"><label class="form-label">مجموع الحفظ</label><input id="bulkSaved" class="form-control"></div><div class="col-md-6"><label class="form-label">حالة الطالب</label><select id="bulkStatus" class="form-select"><option value="">بدون تغيير</option>${statuses}</select></div></div></div>`,width:800,focusConfirm:false,confirmButtonText:'تنفيذ',preConfirm:()=>({studentIds:Array.from(byId('bulkIds').selectedOptions).map(o=>o.value),circle:byId('bulkCircle').value,grade:byId('bulkGrade').value,savedParts:byId('bulkSaved').value,studentStatus:byId('bulkStatus').value})});
-    if(!value) return;
-    try{ await api('bulkUpdateStudents',Object.assign({token:state.session.token},value)); await toast('success','تم التعديل الجماعي'); await loadDashboard(); }catch(err){ toast('error','تعذر التنفيذ',err.message); }
-  }
-
-  function exportCsv(rows){
-    const headers = Object.keys(rows[0]||{}); if(!headers.length) return;
-    const csv = [headers.join(','), ...rows.map(r=>headers.map(h=>`"${String(r[h]??'').replaceAll('"','""')}"`).join(','))].join('\n');
-    const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='students.csv'; a.click(); URL.revokeObjectURL(url);
-  }
-
-  function renderRequests(role){
-    const canManage = roleCan(role,['مشرف إداري','مدير']);
-    byId('requestsPanelWrap').classList.toggle('d-none', !canManage);
-    if(!canManage) return;
-    const ds = state.dashboard.datasets;
-    const reqs = ds.registrationRequests;
-    const upd = ds.updateRequests;
-    const circlesOptions = ds.lists.circles.map(c=>`<option value="${c['اسم_الحلقة']}">${c['اسم_الحلقة']}</option>`).join('');
-    const reqHeaders = [
-      {label:'اسم الطالب',key:'اسم_الطالب'},
-      {label:'هوية الطالب',key:'هوية_الطالب'},
-      {label:'جوال الطالب',key:'جوال_الطالب',render:r=>`<a href="${whats(r['جوال_الطالب'])}" target="_blank">${r['جوال_الطالب']}</a>`},
-      {label:'جوال ولي الأمر',key:'جوال_ولي_الأمر',render:r=>`<a href="${whats(r['جوال_ولي_الأمر'])}" target="_blank">${r['جوال_ولي_الأمر']}</a>`},
-      {label:'المرحلة',key:'المرحلة_الدراسية'},
-      {label:'الصف',key:'الصف_الدراسي'},
-      {label:'الحالة',key:'الحالة'},
-      {label:'إجراءات',render:r=>`<div class="d-flex gap-1 flex-wrap"><button class="btn btn-sm btn-success reg-act" data-id="${r['معرف_الطلب']}" data-status="مقبول">قبول</button><button class="btn btn-sm btn-warning reg-act" data-id="${r['معرف_الطلب']}" data-status="انتظار">انتظار</button><button class="btn btn-sm btn-danger reg-act" data-id="${r['معرف_الطلب']}" data-status="مرفوض">رفض</button></div>`}
-    ];
-    byId('registrationRequestsTable').innerHTML = tableFromRows(reqHeaders, reqs);
-    document.querySelectorAll('.reg-act').forEach(btn=>btn.onclick = async ()=>{
-      const status = btn.dataset.status, requestId = btn.dataset.id;
-      let circle='', teacher='', rejectionReason='';
-      if(status==='مقبول'){
-        const {value} = await Swal.fire({title:'قبول الطلب',html:`<label class="form-label d-block text-end">الحلقة</label><select id="accCircle" class="form-select">${circlesOptions}</select><label class="form-label d-block text-end mt-2">المعلم</label><input id="accTeacher" class="form-control">`,preConfirm:()=>({circle:byId('accCircle').value,teacher:byId('accTeacher').value}),confirmButtonText:'اعتماد'});
-        if(!value) return; circle=value.circle; teacher=value.teacher;
-      }
-      if(status==='مرفوض'){
-        const {value} = await Swal.fire({title:'سبب الرفض',input:'text',inputLabel:'اكتب سبب الرفض',confirmButtonText:'اعتماد الرفض'}); if(!value) return; rejectionReason=value;
-      }
-      try{ await api('processRegistrationRequest',{token:state.session.token,requestId,status,circle,teacher,rejectionReason}); await toast('success','تم تحديث الطلب'); await loadDashboard(); }catch(err){ toast('error','تعذر تحديث الطلب',err.message); }
+    const { value } = await Swal.fire({
+      title: student ? "تعديل بيانات الطالب" : "إضافة طالب جديد",
+      html,
+      width: 1000,
+      focusConfirm: false,
+      confirmButtonText: student ? "حفظ التعديلات" : "إضافة الطالب",
+      preConfirm: () => {
+        return {
+          studentId: student?.["معرف_الطالب"] || "",
+          studentName: safe(byId("sf_studentName")?.value).trim(),
+          studentNationalId: safe(byId("sf_studentNationalId")?.value).trim(),
+          studentMobile: safe(byId("sf_studentMobile")?.value).trim(),
+          studentBirthDate: safe(byId("sf_studentBirthDate")?.value).trim(),
+          studentAddress: safe(byId("sf_studentAddress")?.value).trim(),
+          stage: safe(byId("sf_stage")?.value).trim(),
+          grade: safe(byId("sf_grade")?.value).trim(),
+          guardianName: safe(byId("sf_guardianName")?.value).trim(),
+          guardianMobile: safe(byId("sf_guardianMobile")?.value).trim(),
+          guardianNationalId: safe(byId("sf_guardianNationalId")?.value).trim(),
+          guardianRelation: safe(byId("sf_guardianRelation")?.value).trim(),
+          circle: safe(byId("sf_circle")?.value).trim(),
+          teacher: safe(byId("sf_teacher")?.value).trim(),
+          savedParts: safe(byId("sf_savedParts")?.value).trim(),
+          studentStatus: safe(byId("sf_studentStatus")?.value).trim(),
+          lateCount: safe(byId("sf_lateCount")?.value).trim(),
+          absenceCount: safe(byId("sf_absenceCount")?.value).trim(),
+          excusedAbsenceCount: safe(byId("sf_excusedAbsenceCount")?.value).trim(),
+        };
+      },
     });
 
-    byId('updateRequestsTable').innerHTML = tableFromRows([
-      {label:'اسم الطالب',key:'اسم_الطالب'}, {label:'الحقل',key:'الحقل'}, {label:'القيمة السابقة',key:'القيمة_السابقة'}, {label:'القيمة الجديدة',key:'القيمة_الجديدة'}, {label:'الحالة',key:'الحالة'},
-      {label:'إجراء',render:r=>`<div class="d-flex gap-1"><button class="btn btn-sm btn-success upd-act" data-id="${r['معرف_الطلب']}" data-status="مقبول">قبول</button><button class="btn btn-sm btn-danger upd-act" data-id="${r['معرف_الطلب']}" data-status="مرفوض">رفض</button></div>`}
-    ], upd);
-    document.querySelectorAll('.upd-act').forEach(btn=>btn.onclick = async ()=>{
-      let rejectionReason=''; if(btn.dataset.status==='مرفوض'){ const {value}= await Swal.fire({title:'سبب الرفض',input:'text'}); if(!value) return; rejectionReason=value; }
-      try{ await api('processUpdateRequest',{token:state.session.token,requestId:btn.dataset.id,status:btn.dataset.status,rejectionReason}); await toast('success','تمت معالجة الطلب'); await loadDashboard(); }catch(err){ toast('error','تعذر المعالجة',err.message); }
+    if (!value) return;
+
+    try {
+      const result = await api("saveStudent", {
+        token: state.session.token,
+        ...value,
+      });
+      await toast("success", student ? "تم تحديث الطالب" : "تمت إضافة الطالب", result.message || "");
+      await loadDashboard();
+    } catch (error) {
+      await toast("error", "تعذر حفظ البيانات", error.message);
+    }
+  }
+
+  async function openBulkDialog() {
+    if (!window.Swal || !state.dashboard) return;
+
+    const students = state.dashboard.datasets?.students || [];
+    const lists = state.dashboard.datasets?.lists || {};
+    const circles = lists.circles || [];
+    const grades = lists.grades || [];
+    const statuses = lists.statuses || [];
+
+    const multiStudents = students
+      .map(
+        (s) =>
+          `<option value="${escapeHtml(s["معرف_الطالب"])}">${escapeHtml(
+            s["اسم_الطالب"]
+          )}</option>`
+      )
+      .join("");
+
+    const selectOptions = (items, key) =>
+      items
+        .map((item) => `<option value="${escapeHtml(item[key])}">${escapeHtml(item[key])}</option>`)
+        .join("");
+
+    const { value } = await Swal.fire({
+      title: "تعديل جماعي للطلاب",
+      width: 900,
+      html: `
+        <div class="text-end">
+          <label class="form-label">الطلاب</label>
+          <select id="bulkStudentIds" class="form-select" multiple size="10">${multiStudents}</select>
+
+          <div class="row g-2 mt-2">
+            <div class="col-md-4">
+              <label class="form-label">الحلقة</label>
+              <select id="bulkCircle" class="form-select">
+                <option value="">بدون تغيير</option>
+                ${selectOptions(circles, "اسم_الحلقة")}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">الصف</label>
+              <select id="bulkGrade" class="form-select">
+                <option value="">بدون تغيير</option>
+                ${selectOptions(grades, "الاسم")}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">حالة الطالب</label>
+              <select id="bulkStatus" class="form-select">
+                <option value="">بدون تغيير</option>
+                ${selectOptions(statuses, "الاسم")}
+              </select>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label">مجموع الحفظ</label>
+              <input id="bulkSavedParts" class="form-control" placeholder="مثال: 5 أجزاء">
+            </div>
+          </div>
+        </div>
+      `,
+      confirmButtonText: "تنفيذ التعديل",
+      preConfirm: () => {
+        const select = byId("bulkStudentIds");
+        const ids = Array.from(select?.selectedOptions || []).map((o) => o.value);
+        return {
+          studentIds: ids,
+          circle: safe(byId("bulkCircle")?.value).trim(),
+          grade: safe(byId("bulkGrade")?.value).trim(),
+          studentStatus: safe(byId("bulkStatus")?.value).trim(),
+          savedParts: safe(byId("bulkSavedParts")?.value).trim(),
+        };
+      },
     });
+
+    if (!value) return;
+    if (!value.studentIds || !value.studentIds.length) {
+      await toast("warning", "تنبيه", "اختر طالبًا واحدًا على الأقل");
+      return;
+    }
+
+    try {
+      const result = await api("bulkUpdateStudents", {
+        token: state.session.token,
+        ...value,
+      });
+      await toast("success", "تم التعديل الجماعي", result.message || "");
+      await loadDashboard();
+    } catch (error) {
+      await toast("error", "تعذر تنفيذ التعديل", error.message);
+    }
   }
 
-  function renderWarnings(role){
-    const ds = state.dashboard.datasets;
-    byId('teacherToolsWrap').classList.toggle('d-none', !roleCan(role,['معلم','مدير','مشرف إداري']));
-    byId('educationalToolsWrap').classList.toggle('d-none', !roleCan(role,['مشرف تعليمي','مشرف إداري','مدير']));
-    byId('adminWarningsToolsWrap').classList.toggle('d-none', !roleCan(role,['مشرف إداري','مدير']));
-
-    byId('notesTable').innerHTML = tableFromRows([
-      {label:'الطالب',key:'اسم_الطالب'},{label:'الحلقة',key:'الحلقة'},{label:'المعلم',key:'المعلم'},{label:'الملاحظة',key:'الملاحظة'},{label:'التاريخ',key:'تاريخ_الإضافة'}
-    ], ds.teacherNotes);
-
-    byId('eduWarningsTable').innerHTML = tableFromRows([
-      {label:'الطالب',key:'اسم_الطالب'},{label:'الحلقة',key:'الحلقة'},{label:'السبب',key:'سبب_الإنذار'},{label:'الإجراء الحالي',key:'الإجراء_الحالي'},{label:'الحالة',key:'الحالة'},{label:'إجراء',render:r=>`<button class="btn btn-sm btn-outline-primary warning-update" data-type="تعليمي" data-id="${r['معرف_الإنذار']}">تحديث</button>`}
-    ], ds.educationalWarnings);
-
-    byId('adminWarningsTable').innerHTML = tableFromRows([
-      {label:'الطالب',key:'اسم_الطالب'},{label:'الحلقة',key:'الحلقة'},{label:'النوع',key:'نوع_الإنذار'},{label:'رقم العتبة',key:'رقم_العتبة'},{label:'عدد الحالات',key:'عدد_الحالات'},{label:'الإجراء الحالي',key:'الإجراء_الحالي'},{label:'الحالة',key:'الحالة'},{label:'الرسالة',key:'قالب_الرسالة'},{label:'إجراء',render:r=>`<button class="btn btn-sm btn-outline-primary warning-update" data-type="إداري" data-id="${r['معرف_الإنذار']}">تحديث</button>`}
-    ], ds.administrativeWarnings);
-
-    document.querySelectorAll('.warning-update').forEach(btn=>btn.onclick = ()=>openWarningUpdate(btn.dataset.type, btn.dataset.id));
-    const addNote = byId('addTeacherNoteBtn'); if(addNote) addNote.onclick = ()=>openTeacherNoteDialog();
-    const addEdu = byId('addEduWarningBtn'); if(addEdu) addEdu.onclick = ()=>openEduWarningDialog();
-    const genAdmin = byId('generateAdminWarningsBtn'); if(genAdmin) genAdmin.onclick = async ()=>{ try{ const res=await api('generateAdministrativeWarnings',{token:state.session.token}); await toast('success','تم توليد الإنذارات',res.created.join('، ') || 'لا توجد حالات جديدة'); await loadDashboard(); }catch(err){ toast('error','تعذر التوليد',err.message);} };
+  async function exportStudentsCsv() {
+    try {
+      const result = await api("exportStudentsCsv", {
+        token: state.session.token,
+      });
+      csvDownload(result.filename, result.content);
+    } catch (error) {
+      await toast("error", "تعذر تصدير CSV", error.message);
+    }
   }
 
-  async function openTeacherNoteDialog(){
-    const opts = state.dashboard.datasets.students.map(s=>`<option value="${s['معرف_الطالب']}">${s['اسم_الطالب']}</option>`).join('');
-    const {value}= await Swal.fire({title:'إضافة ملاحظة',html:`<label class="form-label d-block text-end">الطالب</label><select id="noteStudent" class="form-select">${opts}</select><label class="form-label d-block text-end mt-2">الملاحظة</label><textarea id="noteText" class="form-control"></textarea>`,preConfirm:()=>({studentId:byId('noteStudent').value,note:byId('noteText').value}),confirmButtonText:'حفظ'});
-    if(!value) return; try{ await api('addTeacherNote',{token:state.session.token,...value}); await toast('success','تم حفظ الملاحظة'); await loadDashboard(); }catch(err){ toast('error','تعذر الحفظ',err.message); }
+  function renderRequests(role) {
+    const wrap = byId("requestsPanelWrap");
+    if (!wrap || !state.dashboard) return;
+
+    const canManage = roleCan(role, ["مشرف إداري", "مدير"]);
+    wrap.classList.toggle("d-none", !canManage);
+    if (!canManage) return;
+
+    const ds = state.dashboard.datasets || {};
+    const reqs = ds.registrationRequests || [];
+    const upd = ds.updateRequests || [];
+    const circles = ds.lists?.circles || [];
+
+    const circlesOptions = circles
+      .map(
+        (c) => `<option value="${escapeHtml(c["اسم_الحلقة"])}">${escapeHtml(c["اسم_الحلقة"])}</option>`
+      )
+      .join("");
+
+    const regTable = byId("registrationRequestsTable");
+    const updTable = byId("updateRequestsTable");
+
+    if (regTable) {
+      regTable.innerHTML = tableFromRows(
+        [
+          { label: "اسم الطالب", key: "اسم_الطالب" },
+          { label: "هوية الطالب", key: "هوية_الطالب" },
+          {
+            label: "جوال الطالب",
+            key: "جوال_الطالب",
+            render: (r) =>
+              `<a href="${whatsappLink(r["جوال_الطالب"])}" target="_blank">${escapeHtml(
+                r["جوال_الطالب"]
+              )}</a>`,
+          },
+          {
+            label: "جوال ولي الأمر",
+            key: "جوال_ولي_الأمر",
+            render: (r) =>
+              `<a href="${whatsappLink(r["جوال_ولي_الأمر"])}" target="_blank">${escapeHtml(
+                r["جوال_ولي_الأمر"]
+              )}</a>`,
+          },
+          { label: "المرحلة", key: "المرحلة_الدراسية" },
+          { label: "الصف", key: "الصف_الدراسي" },
+          { label: "الحالة", key: "الحالة" },
+          {
+            label: "إجراءات",
+            render: (r) => `
+              <div class="d-flex gap-1 flex-wrap">
+                <button class="btn btn-sm btn-success reg-act" data-id="${escapeHtml(r["معرف_الطلب"])}" data-status="مقبول">قبول</button>
+                <button class="btn btn-sm btn-warning reg-act" data-id="${escapeHtml(r["معرف_الطلب"])}" data-status="انتظار">انتظار</button>
+                <button class="btn btn-sm btn-danger reg-act" data-id="${escapeHtml(r["معرف_الطلب"])}" data-status="مرفوض">رفض</button>
+              </div>
+            `,
+          },
+        ],
+        reqs
+      );
+
+      qsa(".reg-act", regTable).forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const status = btn.dataset.status;
+          const requestId = btn.dataset.id;
+          let circle = "";
+          let teacher = "";
+          let rejectionReason = "";
+
+          if (status === "مقبول") {
+            const { value } = await Swal.fire({
+              title: "قبول الطلب",
+              html: `
+                <div class="text-end">
+                  <label class="form-label d-block">الحلقة</label>
+                  <select id="accCircle" class="form-select">${circlesOptions}</select>
+                  <label class="form-label d-block mt-2">المعلم</label>
+                  <input id="accTeacher" class="form-control">
+                </div>
+              `,
+              confirmButtonText: "اعتماد",
+              preConfirm: () => ({
+                circle: safe(byId("accCircle")?.value).trim(),
+                teacher: safe(byId("accTeacher")?.value).trim(),
+              }),
+            });
+            if (!value) return;
+            circle = value.circle;
+            teacher = value.teacher;
+          }
+
+          if (status === "مرفوض") {
+            const { value } = await Swal.fire({
+              title: "سبب الرفض",
+              input: "text",
+              inputLabel: "اكتب سبب الرفض",
+              confirmButtonText: "اعتماد الرفض",
+            });
+            if (!value) return;
+            rejectionReason = value;
+          }
+
+          try {
+            await api("processRegistrationRequest", {
+              token: state.session.token,
+              requestId,
+              status,
+              circle,
+              teacher,
+              rejectionReason,
+            });
+            await toast("success", "تم تحديث الطلب");
+            await loadDashboard();
+          } catch (error) {
+            await toast("error", "تعذر تحديث الطلب", error.message);
+          }
+        });
+      });
+    }
+
+    if (updTable) {
+      updTable.innerHTML = tableFromRows(
+        [
+          { label: "اسم الطالب", key: "اسم_الطالب" },
+          { label: "الحقل", key: "الحقل" },
+          { label: "القيمة السابقة", key: "القيمة_السابقة" },
+          { label: "القيمة الجديدة", key: "القيمة_الجديدة" },
+          { label: "الحالة", key: "الحالة" },
+          {
+            label: "إجراء",
+            render: (r) => `
+              <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-success upd-act" data-id="${escapeHtml(r["معرف_الطلب"])}" data-status="مقبول">قبول</button>
+                <button class="btn btn-sm btn-danger upd-act" data-id="${escapeHtml(r["معرف_الطلب"])}" data-status="مرفوض">رفض</button>
+              </div>
+            `,
+          },
+        ],
+        upd
+      );
+
+      qsa(".upd-act", updTable).forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          let rejectionReason = "";
+
+          if (btn.dataset.status === "مرفوض") {
+            const { value } = await Swal.fire({
+              title: "سبب الرفض",
+              input: "text",
+            });
+            if (!value) return;
+            rejectionReason = value;
+          }
+
+          try {
+            await api("processUpdateRequest", {
+              token: state.session.token,
+              requestId: btn.dataset.id,
+              status: btn.dataset.status,
+              rejectionReason,
+            });
+            await toast("success", "تمت معالجة طلب التعديل");
+            await loadDashboard();
+          } catch (error) {
+            await toast("error", "تعذر المعالجة", error.message);
+          }
+        });
+      });
+    }
   }
 
-  async function openEduWarningDialog(){
-    const opts = state.dashboard.datasets.students.map(s=>`<option value="${s['معرف_الطالب']}">${s['اسم_الطالب']}</option>`).join('');
-    const {value}= await Swal.fire({title:'إنذار تعليمي جديد',html:`<label class="form-label d-block text-end">الطالب</label><select id="ewStudent" class="form-select">${opts}</select><label class="form-label d-block text-end mt-2">السبب</label><textarea id="ewReason" class="form-control"></textarea><label class="form-label d-block text-end mt-2">الإجراء الحالي</label><input id="ewAction" class="form-control" value="جديد">`,preConfirm:()=>({studentId:byId('ewStudent').value,reason:byId('ewReason').value,actionName:byId('ewAction').value}),confirmButtonText:'إنشاء'});
-    if(!value) return; try{ await api('addEducationalWarning',{token:state.session.token,...value}); await toast('success','تم إنشاء الإنذار'); await loadDashboard(); }catch(err){ toast('error','تعذر الإنشاء',err.message); }
+  function renderWarnings(role) {
+    if (!state.dashboard) return;
+
+    const ds = state.dashboard.datasets || {};
+
+    const teacherToolsWrap = byId("teacherToolsWrap");
+    const eduToolsWrap = byId("educationalToolsWrap");
+    const adminToolsWrap = byId("adminWarningsToolsWrap");
+
+    if (teacherToolsWrap) {
+      teacherToolsWrap.classList.toggle(
+        "d-none",
+        !roleCan(role, ["معلم", "مدير", "مشرف إداري"])
+      );
+    }
+
+    if (eduToolsWrap) {
+      eduToolsWrap.classList.toggle(
+        "d-none",
+        !roleCan(role, ["مشرف تعليمي", "مشرف إداري", "مدير"])
+      );
+    }
+
+    if (adminToolsWrap) {
+      adminToolsWrap.classList.toggle(
+        "d-none",
+        !roleCan(role, ["مشرف إداري", "مدير"])
+      );
+    }
+
+    const notesTable = byId("notesTable");
+    if (notesTable) {
+      notesTable.innerHTML = tableFromRows(
+        [
+          { label: "الطالب", key: "اسم_الطالب" },
+          { label: "الحلقة", key: "الحلقة" },
+          { label: "المعلم", key: "المعلم" },
+          { label: "الملاحظة", key: "الملاحظة" },
+          { label: "التاريخ", key: "تاريخ_الإضافة" },
+        ],
+        ds.teacherNotes || []
+      );
+    }
+
+    const eduWarningsTable = byId("eduWarningsTable");
+    if (eduWarningsTable) {
+      eduWarningsTable.innerHTML = tableFromRows(
+        [
+          { label: "الطالب", key: "اسم_الطالب" },
+          { label: "الحلقة", key: "الحلقة" },
+          { label: "السبب", key: "سبب_الإنذار" },
+          { label: "الإجراء الحالي", key: "الإجراء_الحالي" },
+          { label: "الحالة", key: "الحالة" },
+          {
+            label: "إجراء",
+            render: (r) =>
+              `<button class="btn btn-sm btn-outline-primary warning-update" data-type="تعليمي" data-id="${escapeHtml(
+                r["معرف_الإنذار"]
+              )}">تحديث</button>`,
+          },
+        ],
+        ds.educationalWarnings || []
+      );
+    }
+
+    const adminWarningsTable = byId("adminWarningsTable");
+    if (adminWarningsTable) {
+      adminWarningsTable.innerHTML = tableFromRows(
+        [
+          { label: "الطالب", key: "اسم_الطالب" },
+          { label: "الحلقة", key: "الحلقة" },
+          { label: "النوع", key: "نوع_الإنذار" },
+          { label: "رقم العتبة", key: "رقم_العتبة" },
+          { label: "عدد الحالات", key: "عدد_الحالات" },
+          { label: "الإجراء الحالي", key: "الإجراء_الحالي" },
+          { label: "الحالة", key: "الحالة" },
+          { label: "الرسالة", key: "قالب_الرسالة" },
+          {
+            label: "إجراء",
+            render: (r) =>
+              `<button class="btn btn-sm btn-outline-primary warning-update" data-type="إداري" data-id="${escapeHtml(
+                r["معرف_الإنذار"]
+              )}">تحديث</button>`,
+          },
+        ],
+        ds.administrativeWarnings || []
+      );
+    }
+
+    qsa(".warning-update").forEach((btn) => {
+      btn.addEventListener("click", () => openWarningUpdate(btn.dataset.type, btn.dataset.id));
+    });
+
+    const addTeacherNoteBtn = byId("addTeacherNoteBtn");
+    if (addTeacherNoteBtn) addTeacherNoteBtn.onclick = () => openTeacherNoteDialog();
+
+    const addEduWarningBtn = byId("addEduWarningBtn");
+    if (addEduWarningBtn) addEduWarningBtn.onclick = () => openEduWarningDialog();
+
+    const generateAdminWarningsBtn = byId("generateAdminWarningsBtn");
+    if (generateAdminWarningsBtn) {
+      generateAdminWarningsBtn.onclick = async () => {
+        try {
+          const result = await api("generateAdministrativeWarnings", {
+            token: state.session.token,
+          });
+
+          await toast(
+            "success",
+            "تم توليد الإنذارات",
+            (result.created || []).length ? result.created.join("، ") : "لا توجد حالات جديدة"
+          );
+
+          await loadDashboard();
+        } catch (error) {
+          await toast("error", "تعذر التوليد", error.message);
+        }
+      };
+    }
   }
 
-  async function openWarningUpdate(type, id){
-    const {value}= await Swal.fire({title:'تحديث الإنذار',html:`<label class="form-label d-block text-end">الإجراء الحالي</label><input id="waAction" class="form-control" value="تم التواصل"><label class="form-label d-block text-end mt-2">الحالة</label><select id="waStatus" class="form-select"><option>جديد</option><option>متابعة</option><option>تم التواصل</option><option>استدعاء ولي الأمر</option><option>مكتمل</option><option>مغلق</option></select>`,preConfirm:()=>({actionName:byId('waAction').value,status:byId('waStatus').value}),confirmButtonText:'حفظ'});
-    if(!value) return; try{ await api('updateWarningAction',{token:state.session.token,warningType:type,warningId:id,...value}); await toast('success','تم تحديث الإنذار'); await loadDashboard(); }catch(err){ toast('error','تعذر التحديث',err.message); }
+  async function openTeacherNoteDialog() {
+    if (!window.Swal || !state.dashboard) return;
+
+    const students = state.dashboard.datasets?.students || [];
+    const opts = students
+      .map(
+        (s) => `<option value="${escapeHtml(s["معرف_الطالب"])}">${escapeHtml(s["اسم_الطالب"])}</option>`
+      )
+      .join("");
+
+    const { value } = await Swal.fire({
+      title: "إضافة ملاحظة",
+      html: `
+        <div class="text-end">
+          <label class="form-label d-block">الطالب</label>
+          <select id="noteStudent" class="form-select">${opts}</select>
+          <label class="form-label d-block mt-2">الملاحظة</label>
+          <textarea id="noteText" class="form-control" rows="4"></textarea>
+        </div>
+      `,
+      confirmButtonText: "حفظ",
+      preConfirm: () => ({
+        studentId: safe(byId("noteStudent")?.value).trim(),
+        note: safe(byId("noteText")?.value).trim(),
+      }),
+    });
+
+    if (!value) return;
+
+    try {
+      await api("addTeacherNote", {
+        token: state.session.token,
+        ...value,
+      });
+      await toast("success", "تم حفظ الملاحظة");
+      await loadDashboard();
+    } catch (error) {
+      await toast("error", "تعذر الحفظ", error.message);
+    }
   }
 
-  function renderSettings(role){
-    const wrap = byId('settingsWrap'); if(!wrap) return;
-    const canManage = roleCan(role,['مشرف إداري','مدير']);
-    wrap.classList.toggle('d-none', !canManage); if(!canManage) return;
-    const lists = state.dashboard.datasets.lists;
+  async function openEduWarningDialog() {
+    if (!window.Swal || !state.dashboard) return;
+
+    const students = state.dashboard.datasets?.students || [];
+    const opts = students
+      .map(
+        (s) => `<option value="${escapeHtml(s["معرف_الطالب"])}">${escapeHtml(s["اسم_الطالب"])}</option>`
+      )
+      .join("");
+
+    const { value } = await Swal.fire({
+      title: "إنذار تعليمي جديد",
+      html: `
+        <div class="text-end">
+          <label class="form-label d-block">الطالب</label>
+          <select id="ewStudent" class="form-select">${opts}</select>
+          <label class="form-label d-block mt-2">السبب</label>
+          <textarea id="ewReason" class="form-control" rows="4"></textarea>
+          <label class="form-label d-block mt-2">الإجراء الحالي</label>
+          <input id="ewAction" class="form-control" value="جديد">
+        </div>
+      `,
+      confirmButtonText: "إنشاء",
+      preConfirm: () => ({
+        studentId: safe(byId("ewStudent")?.value).trim(),
+        reason: safe(byId("ewReason")?.value).trim(),
+        actionName: safe(byId("ewAction")?.value).trim(),
+      }),
+    });
+
+    if (!value) return;
+
+    try {
+      await api("addEducationalWarning", {
+        token: state.session.token,
+        ...value,
+      });
+      await toast("success", "تم إنشاء الإنذار");
+      await loadDashboard();
+    } catch (error) {
+      await toast("error", "تعذر الإنشاء", error.message);
+    }
+  }
+
+  async function openWarningUpdate(type, id) {
+    if (!window.Swal) return;
+
+    const { value } = await Swal.fire({
+      title: "تحديث الإنذار",
+      html: `
+        <div class="text-end">
+          <label class="form-label d-block">الإجراء الحالي</label>
+          <input id="waAction" class="form-control" value="تم التواصل">
+          <label class="form-label d-block mt-2">الحالة</label>
+          <select id="waStatus" class="form-select">
+            <option>جديد</option>
+            <option>متابعة</option>
+            <option>تم التواصل</option>
+            <option>استدعاء ولي الأمر</option>
+            <option>مكتمل</option>
+            <option>مغلق</option>
+          </select>
+        </div>
+      `,
+      confirmButtonText: "حفظ",
+      preConfirm: () => ({
+        actionName: safe(byId("waAction")?.value).trim(),
+        status: safe(byId("waStatus")?.value).trim(),
+      }),
+    });
+
+    if (!value) return;
+
+    try {
+      await api("updateWarningAction", {
+        token: state.session.token,
+        warningType: type,
+        warningId: id,
+        ...value,
+      });
+      await toast("success", "تم تحديث الإنذار");
+      await loadDashboard();
+    } catch (error) {
+      await toast("error", "تعذر التحديث", error.message);
+    }
+  }
+
+  function renderSettings(role) {
+    const wrap = byId("settingsWrap");
+    if (!wrap || !state.dashboard) return;
+
+    const canManage = roleCan(role, ["مشرف إداري", "مدير"]);
+    wrap.classList.toggle("d-none", !canManage);
+    if (!canManage) return;
+
+    const lists = state.dashboard.datasets?.lists || {};
     const groups = [
-      ['الحلق','الدوائر',lists.circles,'اسم_الحلقة'],
-      ['المستخدمون','المستخدمون',lists.users,'الاسم'],
-      ['قوالب الرسائل','القوالب',lists.templates,'العنوان'],
-      ['عتبات الإنذارات','العتبات',lists.thresholds,'نوع_الإنذار'],
-      ['إجراءات الإنذارات','الإجراءات',lists.actions,'الاسم']
+      ["الحلق", lists.circles || [], "اسم_الحلقة"],
+      ["المستخدمون", lists.users || [], "الاسم"],
+      ["قوالب الرسائل", lists.templates || [], "العنوان"],
+      ["عتبات الإنذارات", lists.thresholds || [], "نوع_الإنذار"],
+      ["إجراءات الإنذارات", lists.actions || [], "الاسم"],
     ];
-    wrap.innerHTML = groups.map(g=>`<div class="col-md-6"><div class="section-card h-100"><h5 class="fw-bold mb-2">${g[0]}</h5><div class="small-muted mb-3">عدد السجلات: ${g[2].length}</div><div class="border rounded-3 p-2" style="max-height:220px;overflow:auto">${g[2].map(item=>`<div class="py-1 border-bottom small">${safe(item[g[3]])}</div>`).join('') || '<div class="small-muted">لا توجد عناصر</div>'}</div></div></div>`).join('');
+
+    wrap.innerHTML = groups
+      .map(([title, items, key]) => {
+        return `
+          <div class="col-md-6">
+            <div class="section-card h-100">
+              <h5 class="fw-bold mb-2">${escapeHtml(title)}</h5>
+              <div class="small-muted mb-3">عدد السجلات: ${items.length}</div>
+              <div class="border rounded-3 p-2" style="max-height:220px;overflow:auto">
+                ${
+                  items.length
+                    ? items
+                        .map(
+                          (item) =>
+                            `<div class="py-1 border-bottom small">${escapeHtml(item[key])}</div>`
+                        )
+                        .join("")
+                    : `<div class="small-muted">لا توجد عناصر</div>`
+                }
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
   }
 
-  document.addEventListener('DOMContentLoaded', async ()=>{
-    try{
+  document.addEventListener("DOMContentLoaded", async () => {
+    try {
       await initHome();
       await initRegisterPage();
       await initLookupPage();
       await initLoginPage();
       await initDashboardPage();
-    }catch(err){ console.error(err); }
+    } catch (error) {
+      console.error(error);
+    }
   });
+
+  window.NSAR_APP = {
+    api,
+    state,
+    clearSession,
+    saveSession,
+    loadDashboard,
+  };
 })();
