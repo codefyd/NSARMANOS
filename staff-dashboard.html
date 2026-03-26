@@ -1,47 +1,457 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl"><head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>لوحة العاملين</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة العاملين | نظام المجمع</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-bootstrap-4/bootstrap-4.min.css" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    .dashboard-shell{
+      min-height: calc(100vh - 90px);
+    }
+    .dashboard-sidebar{
+      position: sticky;
+      top: 90px;
+    }
+    .sidebar-card,
+    .panel-card{
+      background:#fff;
+      border:1px solid #e9ecef;
+      border-radius:24px;
+      box-shadow:0 10px 30px rgba(15,23,42,.05);
+    }
+    .sidebar-head{
+      padding:20px 20px 10px;
+      border-bottom:1px solid #f1f3f5;
+    }
+    .sidebar-body{
+      padding:14px;
+    }
+    .side-link{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:14px 16px;
+      border-radius:16px;
+      color:#243042;
+      text-decoration:none;
+      font-weight:700;
+      transition:.2s ease;
+      margin-bottom:8px;
+      background:transparent;
+    }
+    .side-link i{
+      width:22px;
+      text-align:center;
+      font-size:1rem;
+    }
+    .side-link:hover{
+      background:#f8f9fa;
+      color:#0d6efd;
+    }
+    .side-link.active{
+      background:linear-gradient(135deg, rgba(13,110,253,.12), rgba(13,110,253,.04));
+      color:#0d6efd;
+    }
+    .welcome-band{
+      background:linear-gradient(135deg,#0d6efd 0%,#0b5ed7 100%);
+      color:#fff;
+      border-radius:28px;
+      padding:28px;
+      box-shadow:0 20px 40px rgba(13,110,253,.18);
+    }
+    .welcome-meta{
+      opacity:.9;
+      font-size:.95rem;
+    }
+    .stat-mini{
+      background:rgba(255,255,255,.14);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:18px;
+      padding:14px 16px;
+      min-width:150px;
+    }
+    .panel-card{
+      padding:20px;
+    }
+    .panel-title{
+      font-weight:800;
+      margin:0;
+      color:#1f2937;
+    }
+    .panel-subtitle{
+      color:#6b7280;
+      font-size:.92rem;
+      margin-top:4px;
+    }
+    .panel-toolbar{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:18px;
+    }
+    .page-panel{
+      display:none;
+    }
+    .page-panel.active{
+      display:block;
+    }
+    .empty-state{
+      text-align:center;
+      padding:30px 15px;
+      color:#6b7280;
+      background:#fafbfc;
+      border:1px dashed #dbe2ea;
+      border-radius:18px;
+    }
+    .data-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+      gap:12px;
+    }
+    .data-item{
+      border:1px solid #edf0f3;
+      border-radius:16px;
+      padding:14px;
+      background:#fcfdff;
+    }
+    .data-item .label{
+      color:#6b7280;
+      font-size:.85rem;
+      margin-bottom:6px;
+    }
+    .data-item .value{
+      color:#1f2937;
+      font-weight:700;
+      word-break:break-word;
+    }
+    .dashboard-table-wrap .table{
+      margin-bottom:0;
+    }
+    .dashboard-table-wrap{
+      border:1px solid #edf0f3;
+      border-radius:18px;
+      overflow:hidden;
+    }
+    .dashboard-table-wrap thead th{
+      background:#f8fafc;
+      font-size:.92rem;
+      white-space:nowrap;
+    }
+    .quick-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      border-radius:999px;
+      padding:8px 14px;
+      background:#f8f9fa;
+      color:#495057;
+      font-size:.9rem;
+      font-weight:700;
+      text-decoration:none;
+    }
+    .section-divider{
+      height:1px;
+      background:#eef2f6;
+      margin:16px 0 18px;
+    }
+    .sub-grid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:16px;
+    }
+    @media (max-width: 991.98px){
+      .dashboard-sidebar{
+        position:static;
+      }
+    }
+    @media (max-width: 767.98px){
+      .welcome-band{
+        padding:22px;
+      }
+      .sub-grid{
+        grid-template-columns:1fr;
+      }
+      .panel-toolbar{
+        align-items:stretch;
+      }
+      .panel-toolbar > div:last-child{
+        width:100%;
+      }
+      .panel-toolbar .btn,
+      .panel-toolbar .quick-chip{
+        width:100%;
+        justify-content:center;
+      }
+    }
+  </style>
 </head>
 <body>
-<nav class="navbar navbar-expand-lg sticky-top"><div class="container"><a class="navbar-brand fw-bold" href="index.html">نظام المجمع</a><div class="ms-auto d-flex align-items-center gap-3"><div><strong id="currentUserName">-</strong><div class="small-muted" id="currentUserRole">-</div></div><button class="btn btn-outline-danger" id="logoutBtn">خروج</button></div></div></nav>
-<div class="container py-4" id="dashboardRoot">
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><h2 class="section-title mb-0">لوحة العاملين</h2><button class="btn btn-outline-primary" id="refreshDashboardBtn">تحديث البيانات</button></div>
-  <div class="row g-3 mb-4" id="kpis"></div>
-  <div class="dashboard-layout">
-    <div class="sidebar section-card">
-      <a href="#" class="side-link active" data-panel="panelStudents"><i class="fa-solid fa-users"></i> إدارة الطلاب</a>
-      <a href="#" class="side-link" data-panel="panelRequests"><i class="fa-solid fa-inbox"></i> الطلبات الواردة</a>
-      <a href="#" class="side-link" data-panel="panelWarnings"><i class="fa-solid fa-triangle-exclamation"></i> الإنذارات</a>
-      <a href="#" class="side-link" data-panel="panelSettings"><i class="fa-solid fa-gear"></i> الإعدادات</a>
+
+  <nav class="navbar navbar-expand-lg sticky-top bg-white border-bottom">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html">
+        <i class="fa-solid fa-mosque ms-2"></i>
+        نظام المجمع
+      </a>
+
+      <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="index.html">
+          <i class="fa-solid fa-house ms-1"></i>
+          الرئيسية
+        </a>
+        <button class="btn btn-outline-primary" id="refreshDashboardBtn">
+          <i class="fa-solid fa-rotate ms-1"></i>
+          تحديث البيانات
+        </button>
+        <button class="btn btn-outline-danger" id="logoutBtn">
+          <i class="fa-solid fa-right-from-bracket ms-1"></i>
+          خروج
+        </button>
+      </div>
     </div>
-    <div>
-      <section class="page-panel active" id="panelStudents">
-        <div class="section-card">
-          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><h4 class="fw-bold mb-0">إدارة الطلاب</h4><div id="studentActions" class="d-flex gap-2 d-none"><button class="btn btn-success" id="openAddStudentBtn">إضافة طالب</button><button class="btn btn-outline-primary" id="openBulkUpdateBtn">تعديل جماعي</button><button class="btn btn-outline-secondary" id="exportCsvBtn">تصدير CSV</button></div></div>
-          <div id="studentsTableWrap"></div>
+  </nav>
+
+  <main class="container py-4 dashboard-shell" id="dashboardRoot">
+    <section class="welcome-band mb-4">
+      <div class="row g-3 align-items-center">
+        <div class="col-lg-7">
+          <div class="welcome-meta mb-2">لوحة العاملين</div>
+          <h1 class="h3 fw-bold mb-2">أهلاً بك في لوحة إدارة المجمع</h1>
+          <p class="mb-0 opacity-75">
+            هذه اللوحة تجمع الطلاب، الطلبات، الملاحظات، الإنذارات، والإعدادات في مكان واحد.
+          </p>
         </div>
-      </section>
-      <section class="page-panel" id="panelRequests">
-        <div id="requestsPanelWrap">
-          <div class="section-card mb-3"><h4 class="fw-bold mb-3">طلبات التسجيل</h4><div id="registrationRequestsTable"></div></div>
-          <div class="section-card"><h4 class="fw-bold mb-3">طلبات تعديل البيانات</h4><div id="updateRequestsTable"></div></div>
+        <div class="col-lg-5">
+          <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+            <div class="stat-mini">
+              <div class="small opacity-75 mb-1">اسم المستخدم</div>
+              <div class="fw-bold" id="currentUserName">-</div>
+            </div>
+            <div class="stat-mini">
+              <div class="small opacity-75 mb-1">الدور</div>
+              <div class="fw-bold" id="currentUserRole">-</div>
+            </div>
+          </div>
         </div>
-      </section>
-      <section class="page-panel" id="panelWarnings">
-        <div class="section-card mb-3" id="teacherToolsWrap"><div class="d-flex justify-content-between align-items-center mb-3"><h4 class="fw-bold mb-0">ملاحظات المعلمين</h4><button class="btn btn-outline-primary" id="addTeacherNoteBtn">إضافة ملاحظة</button></div><div id="notesTable"></div></div>
-        <div class="section-card mb-3" id="educationalToolsWrap"><div class="d-flex justify-content-between align-items-center mb-3"><h4 class="fw-bold mb-0">الإنذارات التعليمية</h4><button class="btn btn-outline-primary" id="addEduWarningBtn">إنذار تعليمي جديد</button></div><div id="eduWarningsTable"></div></div>
-        <div class="section-card" id="adminWarningsToolsWrap"><div class="d-flex justify-content-between align-items-center mb-3"><h4 class="fw-bold mb-0">الإنذارات الإدارية</h4><button class="btn btn-outline-primary" id="generateAdminWarningsBtn">توليد الإنذارات الإدارية</button></div><div id="adminWarningsTable"></div></div>
-      </section>
-      <section class="page-panel" id="panelSettings"><div class="row g-3" id="settingsWrap"></div></section>
+      </div>
+    </section>
+
+    <section class="row g-3 mb-4" id="kpis"></section>
+
+    <div class="row g-4">
+      <div class="col-xl-3 col-lg-4">
+        <aside class="dashboard-sidebar">
+          <div class="sidebar-card">
+            <div class="sidebar-head">
+              <div class="fw-bold">الأقسام الرئيسية</div>
+              <div class="small text-muted mt-1">اختر القسم الذي تريد العمل عليه</div>
+            </div>
+            <div class="sidebar-body">
+              <a href="#" class="side-link active" data-panel="panelStudents">
+                <i class="fa-solid fa-users"></i>
+                <span>إدارة الطلاب</span>
+              </a>
+              <a href="#" class="side-link" data-panel="panelRequests">
+                <i class="fa-solid fa-inbox"></i>
+                <span>الطلبات الواردة</span>
+              </a>
+              <a href="#" class="side-link" data-panel="panelWarnings">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>الملاحظات والإنذارات</span>
+              </a>
+              <a href="#" class="side-link" data-panel="panelSettings">
+                <i class="fa-solid fa-gear"></i>
+                <span>الإعدادات</span>
+              </a>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="col-xl-9 col-lg-8">
+
+        <section class="page-panel active" id="panelStudents">
+          <div class="panel-card">
+            <div class="panel-toolbar">
+              <div>
+                <h3 class="panel-title">إدارة الطلاب</h3>
+                <div class="panel-subtitle">
+                  عرض الطلاب، فتح بطاقة الطالب، إضافة طالب جديد، والتعديل الجماعي.
+                </div>
+              </div>
+
+              <div class="d-flex flex-wrap gap-2" id="studentActions">
+                <button class="btn btn-success d-none" id="openAddStudentBtn">
+                  <i class="fa-solid fa-user-plus ms-1"></i>
+                  إضافة طالب
+                </button>
+                <button class="btn btn-outline-primary d-none" id="openBulkUpdateBtn">
+                  <i class="fa-solid fa-users-gear ms-1"></i>
+                  تعديل جماعي
+                </button>
+                <button class="btn btn-outline-secondary d-none" id="exportCsvBtn">
+                  <i class="fa-solid fa-file-csv ms-1"></i>
+                  تصدير CSV
+                </button>
+              </div>
+            </div>
+
+            <div class="dashboard-table-wrap" id="studentsTableWrap"></div>
+          </div>
+        </section>
+
+        <section class="page-panel" id="panelRequests">
+          <div id="requestsPanelWrap">
+            <div class="panel-card mb-4">
+              <div class="panel-toolbar">
+                <div>
+                  <h3 class="panel-title">طلبات التسجيل</h3>
+                  <div class="panel-subtitle">
+                    متابعة طلبات التسجيل الجديدة أو المنتظرة أو المرفوضة حسب صلاحية المستخدم.
+                  </div>
+                </div>
+                <div>
+                  <span class="quick-chip">
+                    <i class="fa-solid fa-user-plus"></i>
+                    استقبال وقبول الطلبات
+                  </span>
+                </div>
+              </div>
+
+              <div class="dashboard-table-wrap" id="registrationRequestsTable"></div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-toolbar">
+                <div>
+                  <h3 class="panel-title">طلبات تعديل البيانات</h3>
+                  <div class="panel-subtitle">
+                    مراجعة الطلبات الواردة من بوابة بيانات الطالب وقبولها أو رفضها.
+                  </div>
+                </div>
+                <div>
+                  <span class="quick-chip">
+                    <i class="fa-solid fa-file-pen"></i>
+                    اعتماد طلبات التعديل
+                  </span>
+                </div>
+              </div>
+
+              <div class="dashboard-table-wrap" id="updateRequestsTable"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page-panel" id="panelWarnings">
+          <div class="sub-grid">
+
+            <div class="panel-card" id="teacherToolsWrap">
+              <div class="panel-toolbar">
+                <div>
+                  <h3 class="panel-title">ملاحظات المعلمين</h3>
+                  <div class="panel-subtitle">
+                    توثيق ملاحظات الطلاب وعرضها داخل بطاقة الطالب ولوحة العاملين.
+                  </div>
+                </div>
+                <div>
+                  <button class="btn btn-outline-primary" id="addTeacherNoteBtn">
+                    <i class="fa-solid fa-note-sticky ms-1"></i>
+                    إضافة ملاحظة
+                  </button>
+                </div>
+              </div>
+
+              <div class="dashboard-table-wrap" id="notesTable"></div>
+            </div>
+
+            <div class="panel-card" id="educationalToolsWrap">
+              <div class="panel-toolbar">
+                <div>
+                  <h3 class="panel-title">الإنذارات التعليمية</h3>
+                  <div class="panel-subtitle">
+                    إنشاء الإنذارات التعليمية ومتابعتها حتى الإغلاق أو الاكتمال.
+                  </div>
+                </div>
+                <div>
+                  <button class="btn btn-outline-warning" id="addEduWarningBtn">
+                    <i class="fa-solid fa-triangle-exclamation ms-1"></i>
+                    إنذار تعليمي جديد
+                  </button>
+                </div>
+              </div>
+
+              <div class="dashboard-table-wrap" id="eduWarningsTable"></div>
+            </div>
+
+          </div>
+
+          <div class="panel-card mt-4" id="adminWarningsToolsWrap">
+            <div class="panel-toolbar">
+              <div>
+                <h3 class="panel-title">الإنذارات الإدارية</h3>
+                <div class="panel-subtitle">
+                  توليد الإنذارات الإدارية وفق عتبات التأخر والغياب والغياب بعذر، ثم متابعة الإجراء الحالي.
+                </div>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <span class="quick-chip">
+                  <i class="fa-solid fa-bell"></i>
+                  تأخر / غياب / غياب بعذر
+                </span>
+                <button class="btn btn-outline-danger" id="generateAdminWarningsBtn">
+                  <i class="fa-solid fa-bolt ms-1"></i>
+                  توليد الإنذارات الإدارية
+                </button>
+              </div>
+            </div>
+
+            <div class="section-divider"></div>
+            <div class="dashboard-table-wrap" id="adminWarningsTable"></div>
+          </div>
+        </section>
+
+        <section class="page-panel" id="panelSettings">
+          <div class="panel-card">
+            <div class="panel-toolbar">
+              <div>
+                <h3 class="panel-title">الإعدادات</h3>
+                <div class="panel-subtitle">
+                  استعراض القوائم الأساسية مثل الحلق والمستخدمين والقوالب والإجراءات والعتبات.
+                </div>
+              </div>
+              <div>
+                <span class="quick-chip">
+                  <i class="fa-solid fa-sliders"></i>
+                  إعدادات النظام الأساسية
+                </span>
+              </div>
+            </div>
+
+            <div class="row g-3" id="settingsWrap"></div>
+          </div>
+        </section>
+
+      </div>
     </div>
+  </main>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary"></div>
   </div>
-</div>
-<div class="loading-overlay" id="loadingOverlay"><div class="spinner-border text-primary"></div></div>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script><script src="config.js"></script><script src="app.js"></script>
-</body></html>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
